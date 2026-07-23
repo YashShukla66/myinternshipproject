@@ -105,37 +105,42 @@ const Prediction = () => {
 
     let badgeBg = "bg-emerald-500/10 border-emerald-500/30 text-emerald-400";
     let progressBg = "bg-emerald-500";
+    let badgeText = "OPTIMAL HEALTH";
+
     if (risk === "Critical") {
-      badgeBg = "bg-rose-500/10 border-rose-500/40 text-rose-400";
+      badgeBg = "bg-rose-500/15 border-rose-500/40 text-rose-400 shadow-rose-500/10";
       progressBg = "bg-rose-500";
+      badgeText = "CRITICAL WEAR RISK";
     } else if (risk === "High") {
-      badgeBg = "bg-amber-500/10 border-amber-500/40 text-amber-400";
+      badgeBg = "bg-amber-500/15 border-amber-500/40 text-amber-400 shadow-amber-500/10";
       progressBg = "bg-amber-500";
+      badgeText = "HIGH MAINTENANCE RISK";
     } else if (risk === "Moderate") {
-      badgeBg = "bg-yellow-500/10 border-yellow-500/40 text-yellow-400";
+      badgeBg = "bg-yellow-500/15 border-yellow-500/40 text-yellow-400 shadow-yellow-500/10";
       progressBg = "bg-yellow-500";
+      badgeText = "MODERATE WEAR RISK";
     }
 
     return (
       <div className="space-y-4 mt-5">
         {/* Risk Level Badge & Probability Bar */}
         <div className={`p-5 rounded-2xl border ${badgeBg}`}>
-          <div className="flex items-center justify-between font-bold text-sm mb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-bold text-sm mb-3">
             <div className="flex items-center gap-3">
               {isMaintenanceRequired ? (
-                <FaExclamationTriangle className="text-xl animate-pulse" />
+                <FaExclamationTriangle className="text-xl text-rose-400 animate-pulse flex-shrink-0" />
               ) : (
-                <FaCheckCircle className="text-xl" />
+                <FaCheckCircle className="text-xl text-emerald-400 flex-shrink-0" />
               )}
               <div>
                 <p className="text-[10px] uppercase tracking-wider font-semibold opacity-80">AI Model Verdict</p>
-                <p className="text-base font-extrabold mt-0.5">
+                <p className="text-base font-extrabold mt-0.5 tracking-wide">
                   {result.prediction ? result.prediction.toUpperCase() : "EVALUATION COMPLETE"}
                 </p>
               </div>
             </div>
-            <div className="text-right">
-              <span className="px-3 py-1 rounded-full text-xs uppercase tracking-wider font-bold border bg-black/40">
+            <div className="flex-shrink-0">
+              <span className="px-3.5 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-extrabold border bg-slate-950/80 whitespace-nowrap shadow-sm">
                 {risk} Risk Tier
               </span>
             </div>
@@ -145,7 +150,7 @@ const Prediction = () => {
           <div className="space-y-1.5 pt-2 border-t border-white/10">
             <div className="flex justify-between text-xs font-semibold">
               <span className="opacity-90">Failure Probability Score:</span>
-              <span className="font-extrabold">{prob}%</span>
+              <span className="font-extrabold text-sm">{prob}%</span>
             </div>
             <div className="w-full bg-slate-950/60 rounded-full h-2.5 overflow-hidden p-0.5 border border-white/10">
               <div
@@ -177,6 +182,17 @@ const Prediction = () => {
             </div>
           </div>
         </div>
+
+        {/* Analysis Details Note */}
+        {result.reason && (
+          <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 text-xs text-slate-300 flex items-start gap-2">
+            <FaInfoCircle className="text-purple-400 mt-0.5 flex-shrink-0" />
+            <div>
+              <span className="font-semibold text-slate-200">AI Diagnostic Reason: </span>
+              <span className="text-slate-400">{result.reason}</span>
+            </div>
+          </div>
+        )}
 
         {/* Feature Wear Breakdown */}
         {result.wear_breakdown && (
@@ -266,10 +282,10 @@ const Prediction = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => applyPreset(120000, 2017)}
+                  onClick={() => applyPreset(120000, 2005)}
                   className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition"
                 >
-                  🚚 High Mileage (120k / 2017)
+                  🚚 High Wear (120k / 2005)
                 </button>
               </div>
             </div>
@@ -313,7 +329,7 @@ const Prediction = () => {
               <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Analysis Results:</h3>
               <div className="grid grid-cols-2 gap-2 text-xs text-slate-400 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
                 <div>Evaluated Mileage: <span className="text-white font-bold">{paramsResult.mileage} km</span></div>
-                <div>Evaluated Year: <span className="text-white font-bold">{paramsResult.year}</span></div>
+                <div>Evaluated Year: <span className="text-white font-bold">{paramsResult.manufacturing_year || paramsResult.year}</span></div>
               </div>
               <ResultIndicator result={paramsResult} />
             </div>
@@ -368,7 +384,7 @@ const Prediction = () => {
                 <div>Reg No: <span className="text-white font-bold">{vehicleResult.registration_number}</span></div>
                 <div>Name: <span className="text-white font-bold">{vehicleResult.vehicle_name}</span></div>
                 <div>Recorded Mileage: <span className="text-white font-bold">{vehicleResult.mileage} km</span></div>
-                <div>Mfg Year: <span className="text-white font-bold">{vehicleResult.manufacturing_year}</span></div>
+                <div>Mfg Year: <span className="text-white font-bold">{vehicleResult.manufacturing_year || vehicleResult.year}</span></div>
               </div>
               <ResultIndicator result={vehicleResult} />
             </div>

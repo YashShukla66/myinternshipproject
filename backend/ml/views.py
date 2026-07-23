@@ -1,5 +1,6 @@
 import os
 import joblib
+import math
 from datetime import date
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -38,26 +39,38 @@ def compute_prediction_details(mileage, year, service_count=0, total_trip_distan
             proba = model.predict_proba(feature_vector)[0]
             prob_required = float(proba[1])
         except Exception:
-            # Fallback heuristic if model shape mismatch
-            risk_score = (mileage / 100000) * 0.4 + (age / 8.0) * 0.3 + (days_since_last_service / 180.0) * 0.3
-            prob_required = min(0.99, max(0.01, 1 / (1 + math.exp(-risk_score + 1.2))))
+            risk_score = (mileage / 80000.0) * 0.40 + (age / 8.0) * 0.45 + (days_since_last_service / 180.0) * 0.25
+            prob_required = min(0.99, max(0.01, 1 / (1 + math.exp(-(risk_score - 1.0) * 2.5))))
     else:
-        # Heuristic calculation if model file not available
-        risk_score = (mileage / 100000) * 0.4 + (age / 8.0) * 0.3 + (days_since_last_service / 180.0) * 0.3
-        prob_required = min(0.99, max(0.05, risk_score / 2.5))
+        risk_score = (mileage / 80000.0) * 0.40 + (age / 8.0) * 0.45 + (days_since_last_service / 180.0) * 0.25
+        prob_required = min(0.99, max(0.01, 1 / (1 + math.exp(-(risk_score - 1.0) * 2.5))))
+
+    # Domain safety overrides for high-age, high-mileage, or severe service gap
+    if age >= 15.0 or year <= 2011:
+        prob_required = max(prob_required, 0.78) # Force Critical/High risk for vehicles >= 15 yrs old
+    elif age >= 10.0 or year <= 2016:
+        prob_required = max(prob_required, 0.58) # Force High risk for vehicles >= 10 yrs old
+
+    if mileage >= 120000:
+        prob_required = max(prob_required, 0.75)
+    elif mileage >= 80000:
+        prob_required = max(prob_required, 0.55)
+
+    if days_since_last_service >= 365:
+        prob_required = max(prob_required, 0.72)
 
     probability_percentage = round(prob_required * 100, 1)
 
     if probability_percentage >= 75.0:
         risk_level = "Critical"
         prediction = "Maintenance Required"
-        reason = f"High wear probability ({probability_percentage}%) detected. Extreme mileage and service gap thresholds exceeded."
-        recommended_action = "Immediate workshop service and engine overhaul required."
+        reason = f"Critical wear risk ({probability_percentage}%). Vehicle age ({int(age)} yrs) or mileage ({int(mileage):,} km) exceeds safe operational threshold."
+        recommended_action = "Immediate comprehensive workshop service and engine/brake overhaul required."
         estimated_cost = 1200
     elif probability_percentage >= 50.0:
         risk_level = "High"
         prediction = "Maintenance Required"
-        reason = f"Elevated maintenance risk ({probability_percentage}%). Cumulative mileage and age indicate upcoming wear."
+        reason = f"Elevated maintenance risk ({probability_percentage}%). Component degradation detected due to vehicle age and cumulative mileage."
         recommended_action = "Schedule preventive maintenance inspection within 7 days."
         estimated_cost = 650
     elif probability_percentage >= 25.0:
@@ -74,14 +87,15 @@ def compute_prediction_details(mileage, year, service_count=0, total_trip_distan
         estimated_cost = 0
 
     # Feature Wear Factor percentages
-    total_impact = (mileage / 1000) + (age * 15) + (days_since_last_service * 0.5) + 1.0
+    total_impact = (mileage / 1000) + (age * 20) + (days_since_last_service * 0.5) + 1.0
     mileage_wear = round(((mileage / 1000) / total_impact) * 100, 1)
-    age_wear = round(((age * 15) / total_impact) * 100, 1)
+    age_wear = round(((age * 20) / total_impact) * 100, 1)
     service_gap_wear = round(((days_since_last_service * 0.5) / total_impact) * 100, 1)
 
     return {
         "mileage": mileage,
         "year": int(year),
+        "manufacturing_year": int(year),
         "age": age,
         "service_count": int(service_count),
         "total_trip_distance": total_trip_distance,
@@ -167,6 +181,7 @@ class VehicleMaintenancePredictionAPIView(APIView):
         details["vehicle_name"] = vehicle.vehicle_name
         details["vehicle_type"] = vehicle.vehicle_type
         details["status"] = vehicle.status
+        details["manufacturing_year"] = year
         details["recent_service_date"] = str(recent_completed.service_date) if recent_completed else "No previous record"
 
         return Response(details)
