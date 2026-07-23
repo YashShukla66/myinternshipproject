@@ -348,7 +348,7 @@ class AIPredictionExcelReportAPIView(APIView):
             "Risk Tier",
             "Prediction Verdict",
             "Recommended Action",
-            "Est. Maintenance Cost ($)"
+            "Est. Maintenance Cost (₹)"
         ]
         sheet.append(headers)
 

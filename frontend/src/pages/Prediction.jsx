@@ -15,7 +15,7 @@ import {
   FaFilePdf,
   FaFileExcel,
   FaTools,
-  FaDollarSign,
+  FaRupeeSign,
   FaTachometerAlt
 } from "react-icons/fa";
 
@@ -173,11 +173,13 @@ const Prediction = () => {
             </div>
           </div>
           <div className="p-3.5 bg-slate-900/90 rounded-xl border border-slate-800 flex items-start gap-2.5">
-            <FaDollarSign className="text-emerald-400 mt-0.5 text-sm flex-shrink-0" />
+            <FaRupeeSign className="text-emerald-400 mt-0.5 text-sm flex-shrink-0" />
             <div>
               <p className="font-bold text-slate-200">Estimated Service Cost:</p>
               <p className="text-emerald-400 font-extrabold text-sm mt-0.5">
-                {result.estimated_cost ? `$${result.estimated_cost}` : "$150 - $400"}
+                {result.estimated_cost !== undefined && result.estimated_cost !== null
+                  ? `₹${result.estimated_cost.toLocaleString('en-IN')}`
+                  : "₹5,000 - ₹15,000"}
               </p>
             </div>
           </div>

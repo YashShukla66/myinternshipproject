@@ -66,25 +66,25 @@ def compute_prediction_details(mileage, year, service_count=0, total_trip_distan
         prediction = "Maintenance Required"
         reason = f"Critical wear risk ({probability_percentage}%). Vehicle age ({int(age)} yrs) or mileage ({int(mileage):,} km) exceeds safe operational threshold."
         recommended_action = "Immediate comprehensive workshop service and engine/brake overhaul required."
-        estimated_cost = 1200
+        estimated_cost = 35000 # Cost in INR (₹)
     elif probability_percentage >= 50.0:
         risk_level = "High"
         prediction = "Maintenance Required"
         reason = f"Elevated maintenance risk ({probability_percentage}%). Component degradation detected due to vehicle age and cumulative mileage."
         recommended_action = "Schedule preventive maintenance inspection within 7 days."
-        estimated_cost = 650
+        estimated_cost = 18500 # Cost in INR (₹)
     elif probability_percentage >= 25.0:
         risk_level = "Moderate"
         prediction = "No Immediate Maintenance Needed"
         reason = f"Moderate telemetry wear ({probability_percentage}%). Standard maintenance interval approaching."
         recommended_action = "Perform routine fluid and brake check during next scheduled checkup."
-        estimated_cost = 250
+        estimated_cost = 7500 # Cost in INR (₹)
     else:
         risk_level = "Optimal"
         prediction = "No Immediate Maintenance Needed"
         reason = f"Optimal health score ({probability_percentage}% failure risk). Vehicle components within ideal tolerance."
         recommended_action = "Continue regular operational trips. Vehicle in peak condition."
-        estimated_cost = 0
+        estimated_cost = 0 # Cost in INR (₹)
 
     # Feature Wear Factor percentages
     total_impact = (mileage / 1000) + (age * 20) + (days_since_last_service * 0.5) + 1.0
