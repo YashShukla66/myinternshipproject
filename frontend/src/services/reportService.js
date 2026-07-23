@@ -11,3 +11,15 @@ export const downloadVehicleExcel = () => {
         responseType: "blob",
     });
 };
+
+export const downloadAIPredictionPDF = () => {
+    return api.get("reports/ai-predictions/pdf/", {
+        responseType: "blob",
+    });
+};
+
+export const downloadAIPredictionExcel = () => {
+    return api.get("reports/ai-predictions/excel/", {
+        responseType: "blob",
+    });
+};

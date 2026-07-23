@@ -1,28 +1,58 @@
+import os
+import joblib
+import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
-import joblib
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
 
-# Training dataset using mileage and vehicle_age (2026 - manufacturing_year)
-data = pd.DataFrame({
-    "mileage": [
-        5000, 10000, 12000, 15000, 20000, 35000, 45000,
-        55000, 75000, 90000, 120000, 150000, 180000
-    ],
-    "age": [
-        1, 1, 2, 2, 3, 3, 4,
-        5, 6, 7, 8, 9, 10
-    ],
-    "maintenance": [
-        0, 0, 0, 0, 0, 0, 0,
-        1, 1, 1, 1, 1, 1
-    ]
+# Set seed for reproducible synthetic dataset generation
+np.random.seed(42)
+
+n_samples = 1500
+
+# Synthetic dataset generation based on real fleet domain mechanics
+mileage = np.random.uniform(2000, 250000, n_samples)
+age = np.random.uniform(0.5, 12.0, n_samples)
+service_count = np.random.randint(0, 15, n_samples)
+total_trip_distance = mileage * np.random.uniform(0.4, 0.9, n_samples)
+days_since_last_service = np.random.uniform(10, 600, n_samples)
+
+# Wear Risk Score calculation formula incorporating multi-variable telemetry
+risk_score = (
+    (mileage / 120000) * 0.35 +
+    (age / 8.0) * 0.25 +
+    (days_since_last_service / 180.0) * 0.25 +
+    (total_trip_distance / 100000) * 0.15 -
+    (service_count * 0.05)
+)
+
+# Convert to binary maintenance requirement label with logistic sigmoid mapping
+prob = 1 / (1 + np.exp(-(risk_score - 1.1) * 3))
+maintenance = (np.random.uniform(0, 1, n_samples) < prob).astype(int)
+
+df = pd.DataFrame({
+    "mileage": mileage,
+    "age": age,
+    "service_count": service_count,
+    "total_trip_distance": total_trip_distance,
+    "days_since_last_service": days_since_last_service,
+    "maintenance": maintenance
 })
 
-X = data[["mileage", "age"]]
-y = data["maintenance"]
+X = df[["mileage", "age", "service_count", "total_trip_distance", "days_since_last_service"]]
+y = df["maintenance"]
 
-model = RandomForestClassifier(n_estimators=100, random_state=42)
-model.fit(X, y)
+# Train ML Pipeline with feature scaling and Random Forest Classifier
+pipeline = Pipeline([
+    ("scaler", StandardScaler()),
+    ("classifier", RandomForestClassifier(n_estimators=150, max_depth=8, random_state=42))
+])
 
-joblib.dump(model, "ml/model/maintenance_model.pkl")
-print("Model retrained successfully.")
+pipeline.fit(X, y)
+
+# Save serialized ML model pipeline
+os.makedirs("ml/model", exist_ok=True)
+joblib.dump(pipeline, "ml/model/maintenance_model.pkl")
+
+print(f"ML Pipeline trained successfully on {n_samples} samples. Training Accuracy: {pipeline.score(X, y):.4f}")
