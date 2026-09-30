@@ -204,3 +204,9 @@ DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 # OTP Configuration
 OTP_EXPIRY_MINUTES = 5
+
+# -----------------------------
+# Google OAuth2 Configuration
+# -----------------------------
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")

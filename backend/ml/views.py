@@ -1,6 +1,7 @@
 import os
 import joblib
 import math
+import numpy as np
 from datetime import date
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -26,35 +27,69 @@ model = get_ml_model()
 
 
 def compute_prediction_details(mileage, year, service_count=0, total_trip_distance=0, days_since_last_service=30):
+    """
+    Run ML prediction for vehicle maintenance need.
+
+    Args:
+        mileage (float): Fuel efficiency in km/L (10–100 range).
+        year (int): Manufacturing year of the vehicle.
+        service_count (int): Total completed maintenance services.
+        total_trip_distance (float): Total cumulative km driven.
+        days_since_last_service (float): Days since last completed service.
+
+    Returns:
+        dict: Detailed prediction results with probability, risk level, recommendation.
+    """
     age = max(0.5, float(2026 - year))
     mileage = float(mileage)
     service_count = float(service_count)
     total_trip_distance = float(total_trip_distance)
     days_since_last_service = float(days_since_last_service)
 
-    feature_vector = [[mileage, age, service_count, total_trip_distance, days_since_last_service]]
+    # Feature vector: [mileage(km/L), age, service_count, total_trip_distance, days_since_last_service]
+    feature_vector = np.array([[mileage, age, service_count, total_trip_distance, days_since_last_service]])
 
     if model is not None:
         try:
             proba = model.predict_proba(feature_vector)[0]
+            # proba[1] = probability of "Maintenance Required"
             prob_required = float(proba[1])
         except Exception:
-            risk_score = (mileage / 80000.0) * 0.40 + (age / 8.0) * 0.45 + (days_since_last_service / 180.0) * 0.25
+            # Fallback heuristic if model fails
+            risk_score = (
+                ((100 - mileage) / 90.0) * 0.25 +
+                (age / 8.0) * 0.35 +
+                (days_since_last_service / 180.0) * 0.20 +
+                (total_trip_distance / 100000.0) * 0.15 -
+                (service_count * 0.04)
+            )
             prob_required = min(0.99, max(0.01, 1 / (1 + math.exp(-(risk_score - 1.0) * 2.5))))
     else:
-        risk_score = (mileage / 80000.0) * 0.40 + (age / 8.0) * 0.45 + (days_since_last_service / 180.0) * 0.25
+        # No model loaded — pure heuristic
+        risk_score = (
+            ((100 - mileage) / 90.0) * 0.25 +
+            (age / 8.0) * 0.35 +
+            (days_since_last_service / 180.0) * 0.20 +
+            (total_trip_distance / 100000.0) * 0.15 -
+            (service_count * 0.04)
+        )
         prob_required = min(0.99, max(0.01, 1 / (1 + math.exp(-(risk_score - 1.0) * 2.5))))
 
-    # Domain safety overrides for high-age, high-mileage, or severe service gap
+    # Domain safety overrides for high-age vehicles
     if age >= 15.0 or year <= 2011:
-        prob_required = max(prob_required, 0.78) # Force Critical/High risk for vehicles >= 15 yrs old
+        prob_required = max(prob_required, 0.78)  # Force Critical/High risk for vehicles >= 15 yrs old
     elif age >= 10.0 or year <= 2016:
-        prob_required = max(prob_required, 0.58) # Force High risk for vehicles >= 10 yrs old
+        prob_required = max(prob_required, 0.58)  # Force High risk for vehicles >= 10 yrs old
 
-    if mileage >= 120000:
-        prob_required = max(prob_required, 0.75)
-    elif mileage >= 80000:
-        prob_required = max(prob_required, 0.55)
+    # Low fuel efficiency override (mileage < 20 km/L is poor)
+    if mileage <= 15:
+        prob_required = max(prob_required, 0.72)
+    elif mileage <= 25:
+        prob_required = max(prob_required, 0.52)
+
+    # High total distance override
+    if total_trip_distance >= 150000:
+        prob_required = max(prob_required, 0.70)
 
     if days_since_last_service >= 365:
         prob_required = max(prob_required, 0.72)
@@ -64,31 +99,32 @@ def compute_prediction_details(mileage, year, service_count=0, total_trip_distan
     if probability_percentage >= 75.0:
         risk_level = "Critical"
         prediction = "Maintenance Required"
-        reason = f"Critical wear risk ({probability_percentage}%). Vehicle age ({int(age)} yrs) or mileage ({int(mileage):,} km) exceeds safe operational threshold."
+        reason = f"Critical wear risk ({probability_percentage}%). Vehicle age ({int(age)} yrs) and fuel efficiency ({mileage:.0f} km/L) indicate severe component degradation."
         recommended_action = "Immediate comprehensive workshop service and engine/brake overhaul required."
-        estimated_cost = 35000 # Cost in INR (₹)
+        estimated_cost = 35000  # Cost in INR (₹)
     elif probability_percentage >= 50.0:
         risk_level = "High"
         prediction = "Maintenance Required"
-        reason = f"Elevated maintenance risk ({probability_percentage}%). Component degradation detected due to vehicle age and cumulative mileage."
+        reason = f"Elevated maintenance risk ({probability_percentage}%). Component degradation detected due to vehicle age and operational wear."
         recommended_action = "Schedule preventive maintenance inspection within 7 days."
-        estimated_cost = 18500 # Cost in INR (₹)
+        estimated_cost = 18500  # Cost in INR (₹)
     elif probability_percentage >= 25.0:
         risk_level = "Moderate"
         prediction = "No Immediate Maintenance Needed"
         reason = f"Moderate telemetry wear ({probability_percentage}%). Standard maintenance interval approaching."
         recommended_action = "Perform routine fluid and brake check during next scheduled checkup."
-        estimated_cost = 7500 # Cost in INR (₹)
+        estimated_cost = 7500  # Cost in INR (₹)
     else:
         risk_level = "Optimal"
         prediction = "No Immediate Maintenance Needed"
         reason = f"Optimal health score ({probability_percentage}% failure risk). Vehicle components within ideal tolerance."
         recommended_action = "Continue regular operational trips. Vehicle in peak condition."
-        estimated_cost = 0 # Cost in INR (₹)
+        estimated_cost = 0  # Cost in INR (₹)
 
     # Feature Wear Factor percentages
-    total_impact = (mileage / 1000) + (age * 20) + (days_since_last_service * 0.5) + 1.0
-    mileage_wear = round(((mileage / 1000) / total_impact) * 100, 1)
+    eff_factor = max(0.1, (100 - mileage) / 10.0)  # lower efficiency = higher wear factor
+    total_impact = eff_factor + (age * 20) + (days_since_last_service * 0.5) + 1.0
+    mileage_wear = round((eff_factor / total_impact) * 100, 1)
     age_wear = round(((age * 20) / total_impact) * 100, 1)
     service_gap_wear = round(((days_since_last_service * 0.5) / total_impact) * 100, 1)
 
@@ -130,6 +166,13 @@ class PredictMaintenanceAPIView(APIView):
             year = int(year)
         except ValueError:
             return Response({"error": "Invalid numerical parameters provided."}, status=400)
+
+        # Validate mileage range (fuel efficiency: 10–100 km/L)
+        if mileage < 1 or mileage > 150:
+            return Response(
+                {"error": "Mileage (fuel efficiency) should be between 10 and 100 km/L."},
+                status=400,
+            )
 
         details = compute_prediction_details(mileage=mileage, year=year)
         return Response(details)

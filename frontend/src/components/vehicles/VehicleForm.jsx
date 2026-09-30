@@ -211,16 +211,20 @@ export default function VehicleForm({ onSuccess, onCancel, selectedVehicle }) {
                 </div>
 
                 <div>
-                    <label className="block text-slate-300 font-semibold mb-1.5">Mileage (km) *</label>
+                    <label className="block text-slate-300 font-semibold mb-1.5">Mileage (km/L) *</label>
                     <input
                         type="number"
                         name="mileage"
-                        placeholder="e.g. 15000"
+                        min="10"
+                        max="100"
+                        step="0.1"
+                        placeholder="e.g. 45 (range: 10–100)"
                         value={form.mileage}
                         onChange={handleChange}
                         className="w-full glass-input p-3 rounded-xl focus:outline-none"
                         required
                     />
+                    <p className="text-[10px] text-slate-500 mt-1">Fuel efficiency between 10 and 100 km/L</p>
                 </div>
 
                 <div>
@@ -265,7 +269,7 @@ export default function VehicleForm({ onSuccess, onCancel, selectedVehicle }) {
                             <option key={driver.id} value={driver.id}>
                                 {driver.full_name}
                             </option>
-                        ))}
+                        ))}     
                     </select>
                 </div>
 
@@ -309,7 +313,7 @@ export default function VehicleForm({ onSuccess, onCancel, selectedVehicle }) {
                         </div>
                     )}
                 </div>
-            </div>
+            </div>   
 
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
                 {onCancel && (
@@ -319,7 +323,7 @@ export default function VehicleForm({ onSuccess, onCancel, selectedVehicle }) {
                         className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs rounded-xl transition"
                     >
                         Cancel
-                    </button>
+                    </button  >
                 )}
                 <button
                     type="submit"

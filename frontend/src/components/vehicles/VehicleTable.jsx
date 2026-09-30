@@ -240,7 +240,7 @@ export default function VehicleTable({ onEdit, refresh }) {
                                         <td className="p-4">{v.manufacturer}</td>
                                         <td className="p-4">{v.manufacturing_year}</td>
                                         <td className="p-4">{getStatusBadge(v.status)}</td>
-                                        <td className="p-4">{v.mileage} km</td>
+                                        <td className="p-4">{v.mileage} km/L</td>
                                         <td className="p-4 text-slate-300">{v.assigned_driver_name || "Unassigned"}</td>
                                         <td className="p-4 text-center">
                                             <div className="flex items-center justify-center gap-2">

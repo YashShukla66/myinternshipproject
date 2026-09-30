@@ -12,7 +12,6 @@ import {
     FaShieldAlt,
     FaUserCheck,
     FaUserPlus,
-    FaGoogle,
     FaTimes,
     FaEnvelope,
     FaRedo,
@@ -76,11 +75,12 @@ export default function Login() {
 
     // ----- Google Login -----
     useEffect(() => {
-        if (window.google?.accounts?.id) {
+        const initGoogle = () => {
+            if (!window.google?.accounts?.id) return false;
             try {
                 window.google.accounts.id.initialize({
                     client_id:
-                        "1059293154812-demo-client-id.apps.googleusercontent.com",
+                        "982687404808-gjmshkistk08h4pr7jsjjc6qail90521.apps.googleusercontent.com",
                     callback: handleGoogleCallback,
                 });
                 window.google.accounts.id.renderButton(
@@ -92,9 +92,19 @@ export default function Login() {
                         shape: "circle",
                     }
                 );
+                return true;
             } catch (e) {
                 console.log("Google SDK load warning", e);
+                return false;
             }
+        };
+
+        // Try immediately, then poll until SDK loads (async defer script)
+        if (!initGoogle()) {
+            const interval = setInterval(() => {
+                if (initGoogle()) clearInterval(interval);
+            }, 200);
+            return () => clearInterval(interval);
         }
     }, []);
 
@@ -106,25 +116,6 @@ export default function Login() {
                 navigate("/");
             } catch (err) {
                 toast.error("Google sign in failed");
-            } finally {
-                setLoading(false);
-            }
-        }
-    };
-
-    const handleCustomGoogleLogin = async () => {
-        if (window.google?.accounts?.id) {
-            window.google.accounts.id.prompt();
-        } else {
-            setLoading(true);
-            try {
-                await googleLoginUser({
-                    email: "demo.user@gmail.com",
-                    name: "Google Account User",
-                });
-                navigate("/");
-            } catch (err) {
-                toast.error("Google Authentication error");
             } finally {
                 setLoading(false);
             }
@@ -420,17 +411,7 @@ export default function Login() {
                             Or Continue With
                         </p>
 
-                        <div id="googleBtnDiv" className="w-full mb-2"></div>
-
-                        <button
-                            type="button"
-                            onClick={handleCustomGoogleLogin}
-                            disabled={loading}
-                            className="w-full py-3 bg-white text-slate-900 hover:bg-slate-100 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow transition active:scale-[0.99]"
-                        >
-                            <FaGoogle className="text-rose-500 text-base" />
-                            <span>Sign in with Google Account</span>
-                        </button>
+                        <div id="googleBtnDiv" className="w-full"></div>
                     </div>
 
                     {/* Registration & Demo Options Footer */}

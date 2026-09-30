@@ -80,22 +80,117 @@ class Trip(models.Model):
             return "SCHEDULED"
 
     def save(self, *args, **kwargs):
+        old_driver = None
+        if self.pk:
+            try:
+                old_trip = Trip.objects.get(pk=self.pk)
+                if old_trip.driver_id != self.driver_id:
+                    old_driver = old_trip.driver
+            except Trip.DoesNotExist:
+                pass
+
         if self.start_time:
             self.status = self.calculate_status()
         super().save(*args, **kwargs)
 
         # Sync assigned Driver status
         if self.driver:
-            if self.status == "ONGOING":
-                self.driver.status = "ON_TRIP"
-                self.driver.save(update_fields=["status"])
+            if self.status in ["SCHEDULED", "ONGOING"]:
+                if self.driver.status != "ON_TRIP" and self.driver.status != "LEAVE":
+                    self.driver.status = "ON_TRIP"
+                    self.driver.save(update_fields=["status"])
             elif self.status in ["COMPLETED", "CANCELLED"]:
-                has_other_ongoing = Trip.objects.filter(
-                    driver=self.driver, status="ONGOING"
+                has_active = Trip.objects.filter(
+                    driver=self.driver, status__in=["SCHEDULED", "ONGOING"]
                 ).exclude(id=self.id).exists()
-                if not has_other_ongoing:
+                if not has_active and self.driver.status == "ON_TRIP":
                     self.driver.status = "AVAILABLE"
                     self.driver.save(update_fields=["status"])
 
+        # If driver changed on this trip, re-evaluate old driver
+        if old_driver and old_driver.pk != (self.driver.pk if self.driver else None):
+            has_active_for_old = Trip.objects.filter(
+                driver=old_driver, status__in=["SCHEDULED", "ONGOING"]
+            ).exclude(id=self.id).exists()
+            if not has_active_for_old and old_driver.status == "ON_TRIP":
+                old_driver.status = "AVAILABLE"
+                old_driver.save(update_fields=["status"])
+
+    def delete(self, *args, **kwargs):
+        driver = self.driver
+        trip_id = self.id
+        result = super().delete(*args, **kwargs)
+        if driver:
+            has_active = Trip.objects.filter(
+                driver=driver, status__in=["SCHEDULED", "ONGOING"]
+            ).exclude(id=trip_id).exists()
+            if not has_active and driver.status == "ON_TRIP":
+                driver.status = "AVAILABLE"
+                driver.save(update_fields=["status"])
+        return result
+
     def __str__(self):
         return self.trip_id
+
+
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
+
+
+@receiver(post_delete, sender=Trip)
+def sync_driver_on_trip_delete(sender, instance, **kwargs):
+    if instance.driver_id:
+        try:
+            driver = instance.driver
+            has_active = Trip.objects.filter(
+                driver=driver, status__in=["SCHEDULED", "ONGOING"]
+            ).exclude(id=instance.id).exists()
+            if not has_active and driver.status == "ON_TRIP":
+                driver.status = "AVAILABLE"
+                driver.save(update_fields=["status"])
+        except Driver.DoesNotExist:
+            pass
+
+
+def sync_all_driver_statuses():
+    """
+    Ensure all trip states and driver availability statuses are accurate and in sync.
+    """
+    now = timezone.now()
+
+    # 1. Complete trips whose end_time has passed
+    completed_trips = Trip.objects.filter(
+        status__in=["SCHEDULED", "ONGOING"],
+        end_time__isnull=False,
+        end_time__lte=now,
+    ).exclude(status="CANCELLED")
+    for trip in completed_trips:
+        trip.status = "COMPLETED"
+        trip.save()
+
+    # 2. Auto-start trips whose start_time has arrived
+    ongoing_trips = Trip.objects.filter(
+        status="SCHEDULED",
+        start_time__lte=now,
+    ).exclude(status="CANCELLED")
+    for trip in ongoing_trips:
+        if not trip.end_time or trip.end_time > now:
+            trip.status = "ONGOING"
+            trip.save()
+
+    # 3. Synchronize driver statuses based on active trips (SCHEDULED or ONGOING)
+    active_driver_ids = set(
+        Trip.objects.filter(
+            status__in=["SCHEDULED", "ONGOING"]
+        ).values_list("driver_id", flat=True)
+    )
+
+    # Any driver with an active trip should be ON_TRIP (unless on LEAVE)
+    Driver.objects.filter(
+        id__in=active_driver_ids
+    ).exclude(status="LEAVE").exclude(status="ON_TRIP").update(status="ON_TRIP")
+
+    # Any driver currently ON_TRIP who has no active trips should be reverted to AVAILABLE
+    Driver.objects.filter(
+        status="ON_TRIP"
+    ).exclude(id__in=active_driver_ids).update(status="AVAILABLE")

@@ -1,27 +1,54 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createTrip, updateTrip } from '../../services/tripService';
 import { getDrivers } from '../../services/driverService';
 import { getVehicles } from '../../services/vehicleService';
 import { toast } from 'react-toastify';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// Fix for default marker icon in Leaflet + React
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+
+let DefaultIcon = L.icon({
+    iconUrl: icon,
+    shadowUrl: iconShadow,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+});
+L.Marker.prototype.options.icon = DefaultIcon;
+
+// Component to auto-fit map bounds to markers and route
+const MapFitter = ({ markers, routePath }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (routePath.length > 0) {
+      const bounds = L.latLngBounds(routePath);
+      map.fitBounds(bounds, { padding: [30, 30] });
+    } else if (markers.length > 0) {
+      const bounds = L.latLngBounds(markers.map(m => [m.lat, m.lng]));
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 10 });
+    }
+  }, [markers, routePath, map]);
+  return null;
+};
+
+const center = [20.5937, 78.9629]; // Center of India
 
 export default function TripForm({ selectedTrip, onSuccess, onCancel }) {
-  // Convert datetime-local string (local time) to UTC ISO for backend
   const localToUTCISO = (localStr) => {
     if (!localStr) return null;
-    // new Date(localStr) correctly treats datetime-local string as local time
     return new Date(localStr).toISOString();
   };
 
-  // Convert UTC ISO (from backend) to local datetime-local format for input
   const utcToLocalInput = (utcStr) => {
     if (!utcStr) return '';
     const d = new Date(utcStr);
-    // Adjust for local timezone offset to get correct local time string
     const offset = d.getTimezoneOffset() * 60000;
     return new Date(d.getTime() - offset).toISOString().slice(0, 16);
   };
 
-  // Get local datetime string offset by N minutes from now
   const getLocalDateTimeString = (offsetMinutes = 0) => {
     const d = new Date(Date.now() + offsetMinutes * 60000);
     const offset = d.getTimezoneOffset() * 60000;
@@ -34,8 +61,8 @@ export default function TripForm({ selectedTrip, onSuccess, onCancel }) {
     vehicle: '',
     source: '',
     destination: '',
-    start_time: getLocalDateTimeString(30), // default: 30 mins from now
-    end_time: getLocalDateTimeString(90),   // default: 90 mins from now
+    start_time: getLocalDateTimeString(30),
+    end_time: getLocalDateTimeString(90),
     distance: '',
     status: 'SCHEDULED',
     notes: ''
@@ -44,6 +71,13 @@ export default function TripForm({ selectedTrip, onSuccess, onCancel }) {
   const [drivers, setDrivers] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingRoute, setLoadingRoute] = useState(false);
+
+  // Map States
+  const [markers, setMarkers] = useState([]);
+  const [routePath, setRoutePath] = useState([]);
+  const originRef = useRef();
+  const destRef = useRef();
 
   useEffect(() => {
     fetchDropdownData();
@@ -69,7 +103,6 @@ export default function TripForm({ selectedTrip, onSuccess, onCancel }) {
         vehicle: selectedTrip.vehicle || '',
         source: selectedTrip.source || '',
         destination: selectedTrip.destination || '',
-        // Use utcToLocalInput so returned UTC values display correctly as local time
         start_time: utcToLocalInput(selectedTrip.start_time),
         end_time: utcToLocalInput(selectedTrip.end_time),
         distance: selectedTrip.distance || '',
@@ -108,13 +141,97 @@ export default function TripForm({ selectedTrip, onSuccess, onCancel }) {
     setFormData(updatedData);
   };
 
+  async function calculateRoute() {
+    if (!originRef.current.value || !destRef.current.value) {
+      toast.warning('Please enter both Origin and Destination');
+      return;
+    }
+    
+    setLoadingRoute(true);
+    const sourceStr = originRef.current.value;
+    const destStr = destRef.current.value;
+
+    setFormData(prev => ({
+      ...prev,
+      source: sourceStr,
+      destination: destStr
+    }));
+
+    try {
+      // 1. Geocode Source using free Nominatim API
+      const sourceRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(sourceStr)}`);
+      const sourceData = await sourceRes.json();
+      if (!sourceData || sourceData.length === 0) throw new Error("Origin not found. Try a more specific location.");
+      const sLat = parseFloat(sourceData[0].lat);
+      const sLon = parseFloat(sourceData[0].lon);
+
+      // 2. Geocode Destination
+      const destRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(destStr)}`);
+      const destData = await destRes.json();
+      if (!destData || destData.length === 0) throw new Error("Destination not found. Try a more specific location.");
+      const dLat = parseFloat(destData[0].lat);
+      const dLon = parseFloat(destData[0].lon);
+
+      setMarkers([
+        { lat: sLat, lng: sLon, label: "Origin: " + sourceData[0].display_name.split(',')[0] },
+        { lat: dLat, lng: dLon, label: "Destination: " + destData[0].display_name.split(',')[0] }
+      ]);
+
+      // 3. Get Route via Free OSRM API
+      const routeRes = await fetch(`https://router.project-osrm.org/route/v1/driving/${sLon},${sLat};${dLon},${dLat}?overview=full&geometries=geojson`);
+      const routeData = await routeRes.json();
+      
+      if (routeData.code !== "Ok") throw new Error("Could not calculate driving route between these locations.");
+
+      const routeDistanceKm = (routeData.routes[0].distance / 1000).toFixed(1);
+      
+      // OSRM returns coordinates as [lon, lat], Leaflet Polyline expects [lat, lon]
+      const coordinates = routeData.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
+      
+      setRoutePath(coordinates);
+      setFormData(prev => ({ ...prev, distance: routeDistanceKm }));
+      
+      toast.success('Route calculated successfully!');
+    } catch (error) {
+      toast.error(error.message || 'Error calculating route.');
+      console.error(error);
+    } finally {
+      setLoadingRoute(false);
+    }
+  }
+
+  function clearRoute() {
+    setRoutePath([]);
+    setMarkers([]);
+    if(originRef.current) originRef.current.value = '';
+    if(destRef.current) destRef.current.value = '';
+    setFormData(prev => ({
+      ...prev,
+      source: '',
+      destination: '',
+      distance: ''
+    }));
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    let currentSource = formData.source;
+    let currentDest = formData.destination;
+    
+    if (originRef.current && originRef.current.value) {
+       currentSource = originRef.current.value;
+    }
+    if (destRef.current && destRef.current.value) {
+       currentDest = destRef.current.value;
+    }
+    
     setLoading(true);
 
     const payload = {
       ...formData,
-      // Convert local datetime-local strings → proper UTC ISO timestamps for Django
+      source: currentSource,
+      destination: currentDest,
       start_time: localToUTCISO(formData.start_time),
       end_time: localToUTCISO(formData.end_time),
       distance: formData.distance === '' ? null : formData.distance,
@@ -140,6 +257,7 @@ export default function TripForm({ selectedTrip, onSuccess, onCancel }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-5 text-xs">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Basic Information */}
         <div>
           <label className="block text-slate-300 font-semibold mb-1.5">Trip ID / Dispatch Code *</label>
           <input
@@ -182,7 +300,9 @@ export default function TripForm({ selectedTrip, onSuccess, onCancel }) {
           >
             <option value="">-- Select Driver --</option>
             {drivers.map(d => (
-              <option key={d.id} value={d.id}>{d.full_name}</option>
+              <option key={d.id} value={d.id}>
+                {d.full_name} ({d.status === 'AVAILABLE' ? 'Available' : d.status === 'ON_TRIP' ? 'On Trip' : d.status})
+              </option>
             ))}
           </select>
         </div>
@@ -203,32 +323,103 @@ export default function TripForm({ selectedTrip, onSuccess, onCancel }) {
           </select>
         </div>
 
-        <div>
-          <label className="block text-slate-300 font-semibold mb-1.5">Origin / Source *</label>
-          <input
-            type="text"
-            name="source"
-            placeholder="e.g. New Delhi Hub"
-            value={formData.source}
-            onChange={handleChange}
-            className="w-full glass-input p-3 rounded-xl focus:outline-none"
-            required
-          />
+        {/* Map and Routing Section (Leaflet) */}
+        <div className="md:col-span-2 bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
+          <div className="flex flex-col md:flex-row gap-4 mb-4">
+            <div className="flex-1 relative">
+              <label className="block text-slate-300 font-semibold mb-1.5">Origin / Source *</label>
+              <input
+                type="text"
+                name="source"
+                placeholder="e.g. Nagpur"
+                defaultValue={formData.source}
+                ref={originRef}
+                className="w-full glass-input p-3 rounded-xl focus:outline-none bg-slate-800"
+                required
+              />
+            </div>
+
+            <div className="flex-1 relative">
+              <label className="block text-slate-300 font-semibold mb-1.5">Destination *</label>
+              <input
+                type="text"
+                name="destination"
+                placeholder="e.g. Mumbai"
+                defaultValue={formData.destination}
+                ref={destRef}
+                className="w-full glass-input p-3 rounded-xl focus:outline-none bg-slate-800"
+                required
+              />
+            </div>
+
+            <div className="flex items-end pb-[2px] gap-2">
+              <button
+                type="button"
+                onClick={calculateRoute}
+                disabled={loadingRoute}
+                className="px-4 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition disabled:opacity-50"
+              >
+                {loadingRoute ? 'Locating...' : 'Calculate Route'}
+              </button>
+              <button
+                type="button"
+                onClick={clearRoute}
+                className="px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl transition"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+          
+          {/* Leaflet Map display */}
+          <div className="w-full h-64 rounded-xl overflow-hidden border border-slate-700/50 mb-3 z-0 relative" style={{ zIndex: 0 }}>
+            <MapContainer 
+              center={center} 
+              zoom={4} 
+              style={{ width: '100%', height: '100%' }}
+              zoomControl={true}
+            >
+              {/* Dark themed tile layer using CartoDB */}
+              <TileLayer
+                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+              />
+              
+              {markers.map((m, idx) => (
+                <Marker key={idx} position={[m.lat, m.lng]}>
+                  <Popup>{m.label}</Popup>
+                </Marker>
+              ))}
+
+              {routePath.length > 0 && (
+                <Polyline 
+                  positions={routePath} 
+                  color="#818cf8" // indigo-400
+                  weight={4}
+                  opacity={0.8}
+                />
+              )}
+
+              <MapFitter markers={markers} routePath={routePath} />
+            </MapContainer>
+          </div>
+          
+          <div className="flex items-center gap-2">
+             <label className="text-slate-300 font-semibold">Calculated Distance (km):</label>
+             <input
+              type="number"
+              step="0.1"
+              name="distance"
+              placeholder="e.g. 1420.5"
+              value={formData.distance}
+              onChange={handleChange}
+              className="glass-input p-2 rounded-xl focus:outline-none w-32 bg-slate-800/50"
+              required
+            />
+          </div>
         </div>
 
-        <div>
-          <label className="block text-slate-300 font-semibold mb-1.5">Destination *</label>
-          <input
-            type="text"
-            name="destination"
-            placeholder="e.g. Mumbai Central Depot"
-            value={formData.destination}
-            onChange={handleChange}
-            className="w-full glass-input p-3 rounded-xl focus:outline-none"
-            required
-          />
-        </div>
-
+        {/* Date/Time Information */}
         <div>
           <label className="block text-slate-300 font-semibold mb-1.5">Start Date &amp; Time *</label>
           <input
@@ -255,19 +446,6 @@ export default function TripForm({ selectedTrip, onSuccess, onCancel }) {
         </div>
 
         <div className="md:col-span-2">
-          <label className="block text-slate-300 font-semibold mb-1.5">Distance (km)</label>
-          <input
-            type="number"
-            step="0.1"
-            name="distance"
-            placeholder="e.g. 1420.5"
-            value={formData.distance}
-            onChange={handleChange}
-            className="w-full glass-input p-3 rounded-xl focus:outline-none"
-          />
-        </div>
-
-        <div className="md:col-span-2">
           <label className="block text-slate-300 font-semibold mb-1.5">Notes & Manifest Remarks</label>
           <textarea
             name="notes"
@@ -280,7 +458,7 @@ export default function TripForm({ selectedTrip, onSuccess, onCancel }) {
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+      <div className="flex justify-end gap-3 pt-4 border-t border-slate-800 mt-6">
         {onCancel && (
           <button
             type="button"

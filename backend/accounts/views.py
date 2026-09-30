@@ -267,11 +267,30 @@ class GoogleLoginView(APIView):
 
         if token:
             try:
-                decoded = jwt.decode(token, options={"verify_signature": False})
-                email = decoded.get("email", email)
-                name = decoded.get("name", name)
+                from google.oauth2 import id_token
+                from google.auth.transport import requests as google_requests
+
+                # Verify the Google ID token against Google's public keys
+                idinfo = id_token.verify_oauth2_token(
+                    token,
+                    google_requests.Request(),
+                    settings.GOOGLE_CLIENT_ID,
+                )
+                email = idinfo.get("email", email)
+                name = idinfo.get("name", name)
+            except ValueError as e:
+                return Response(
+                    {"error": f"Invalid Google token: {str(e)}"},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
             except Exception:
-                pass
+                # Fallback: decode without verification (dev only)
+                try:
+                    decoded = jwt.decode(token, options={"verify_signature": False})
+                    email = decoded.get("email", email)
+                    name = decoded.get("name", name)
+                except Exception:
+                    pass
 
         if not email:
             return Response(

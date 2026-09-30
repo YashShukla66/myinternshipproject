@@ -204,7 +204,7 @@ const Prediction = () => {
             </p>
             <div className="grid grid-cols-3 gap-2 text-[11px] text-center">
               <div className="p-2 bg-slate-950/60 rounded-lg border border-slate-800">
-                <span className="block text-slate-400 text-[10px]">Mileage Wear</span>
+                <span className="block text-slate-400 text-[10px]">Efficiency Wear</span>
                 <span className="font-bold text-purple-300">{result.wear_breakdown.mileage_impact}%</span>
               </div>
               <div className="p-2 bg-slate-950/60 rounded-lg border border-slate-800">
@@ -236,7 +236,7 @@ const Prediction = () => {
             <FaRobot className="text-purple-400" /> Maintenance Intelligence & AI Diagnostics
           </h1>
           <p className="text-slate-400 text-xs mt-1">
-            Machine learning Random Forest algorithm assessing failure probability, wear factors, and estimated service costs.
+            Scikit-Learn Random Forest ML pipeline (StandardScaler → RandomForestClassifier) assessing failure probability, wear factors, and estimated service costs.
           </p>
         </div>
 
@@ -267,7 +267,7 @@ const Prediction = () => {
               </div>
               <div>
                 <h2 className="text-lg font-bold text-white">Predict by Custom Parameters</h2>
-                <p className="text-xs text-slate-400">Run model inference for custom mileage and year</p>
+                <p className="text-xs text-slate-400">Run model inference for fuel efficiency (km/L) and year</p>
               </div>
             </div>
 
@@ -277,32 +277,43 @@ const Prediction = () => {
               <div className="flex flex-wrap gap-2 text-xs">
                 <button
                   type="button"
-                  onClick={() => applyPreset(25000, 2023)}
+                  onClick={() => applyPreset(45, 2023)}
                   className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition"
                 >
-                  🚗 Low Mileage (25k / 2023)
+                  🚗 Good Efficiency (45 km/L / 2023)
                 </button>
                 <button
                   type="button"
-                  onClick={() => applyPreset(120000, 2005)}
+                  onClick={() => applyPreset(12, 2008)}
                   className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition"
                 >
-                  🚚 High Wear (120k / 2005)
+                  🚚 Poor Efficiency (12 km/L / 2008)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset(70, 2021)}
+                  className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition"
+                >
+                  🏍️ High Efficiency (70 km/L / 2021)
                 </button>
               </div>
             </div>
 
             <form onSubmit={handleParamsSubmit} className="space-y-4 text-xs">
               <div>
-                <label className="block font-semibold text-slate-300 mb-1.5">Mileage (km) *</label>
+                <label className="block font-semibold text-slate-300 mb-1.5">Fuel Efficiency (km/L) *</label>
                 <input
                   type="number"
+                  min="10"
+                  max="100"
+                  step="0.1"
                   value={paramsData.mileage}
                   onChange={(e) => setParamsData({ ...paramsData, mileage: e.target.value })}
                   className="w-full glass-input p-3 rounded-xl focus:outline-none"
-                  placeholder="e.g. 75000"
+                  placeholder="e.g. 45 (range: 10–100)"
                   required
                 />
+                <p className="text-[10px] text-slate-500 mt-1">Enter vehicle fuel efficiency between 10 and 100 km/L</p>
               </div>
               <div>
                 <label className="block font-semibold text-slate-300 mb-1.5">Manufacturing Year *</label>
@@ -330,7 +341,7 @@ const Prediction = () => {
             <div className="mt-6 pt-4 border-t border-slate-800">
               <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Analysis Results:</h3>
               <div className="grid grid-cols-2 gap-2 text-xs text-slate-400 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
-                <div>Evaluated Mileage: <span className="text-white font-bold">{paramsResult.mileage} km</span></div>
+                <div>Fuel Efficiency: <span className="text-white font-bold">{paramsResult.mileage} km/L</span></div>
                 <div>Evaluated Year: <span className="text-white font-bold">{paramsResult.manufacturing_year || paramsResult.year}</span></div>
               </div>
               <ResultIndicator result={paramsResult} />
@@ -363,7 +374,7 @@ const Prediction = () => {
                   <option value="">-- Choose a Vehicle --</option>
                   {vehicles.map((v) => (
                     <option key={v.id} value={v.id}>
-                      {v.registration_number} - {v.vehicle_name} ({v.mileage} km)
+                      {v.registration_number} - {v.vehicle_name} ({v.mileage} km/L)
                     </option>
                   ))}
                 </select>
@@ -385,7 +396,7 @@ const Prediction = () => {
               <div className="grid grid-cols-2 gap-2 text-xs text-slate-400 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
                 <div>Reg No: <span className="text-white font-bold">{vehicleResult.registration_number}</span></div>
                 <div>Name: <span className="text-white font-bold">{vehicleResult.vehicle_name}</span></div>
-                <div>Recorded Mileage: <span className="text-white font-bold">{vehicleResult.mileage} km</span></div>
+                <div>Fuel Efficiency: <span className="text-white font-bold">{vehicleResult.mileage} km/L</span></div>
                 <div>Mfg Year: <span className="text-white font-bold">{vehicleResult.manufacturing_year || vehicleResult.year}</span></div>
               </div>
               <ResultIndicator result={vehicleResult} />

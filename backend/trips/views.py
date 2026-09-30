@@ -1,7 +1,6 @@
-from django.utils import timezone
 from rest_framework import viewsets
 
-from .models import Trip
+from .models import Trip, sync_all_driver_statuses
 from .serializers import TripSerializer
 
 
@@ -26,25 +25,5 @@ class TripViewSet(viewsets.ModelViewSet):
     ]
 
     def get_queryset(self):
-        now = timezone.now()
-        # Auto-complete trips whose end_time has passed
-        completed_trips = Trip.objects.filter(
-            status__in=["SCHEDULED", "ONGOING"],
-            end_time__isnull=False,
-            end_time__lte=now,
-        ).exclude(status="CANCELLED")
-        for trip in completed_trips:
-            trip.status = "COMPLETED"
-            trip.save()
-
-        # Auto-start trips whose start_time has arrived but end_time is in future or null
-        ongoing_trips = Trip.objects.filter(
-            status="SCHEDULED",
-            start_time__lte=now,
-        ).exclude(status="CANCELLED")
-        for trip in ongoing_trips:
-            if not trip.end_time or trip.end_time > now:
-                trip.status = "ONGOING"
-                trip.save()
-
+        sync_all_driver_statuses()
         return Trip.objects.all()

@@ -2,6 +2,7 @@ from rest_framework import viewsets
 
 from .models import Driver
 from .serializers import DriverSerializer
+from trips.models import sync_all_driver_statuses
 
 
 class DriverViewSet(viewsets.ModelViewSet):
@@ -23,3 +24,7 @@ class DriverViewSet(viewsets.ModelViewSet):
         "joining_date",
         "created_at",
     ]
+
+    def get_queryset(self):
+        sync_all_driver_statuses()
+        return Driver.objects.all()

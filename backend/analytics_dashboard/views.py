@@ -3,20 +3,17 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from drivers.models import Driver
-from trips.models import Trip
+from trips.models import Trip, sync_all_driver_statuses
 from vehicles.models import Vehicle
-from maintenance.models import MaintenanceRecord
-
-from django.db.models import Count
-
 from maintenance.models import MaintenanceRecord
 
 
 class DashboardAPIView(APIView):
 
     def get(self, request):
-
+        sync_all_driver_statuses()
         data = {
+
 
             "total_vehicles": Vehicle.objects.count(),
 
@@ -104,7 +101,7 @@ class VehicleStatusChartAPIView(APIView):
 class DriverStatusChartAPIView(APIView):
 
     def get(self, request):
-
+        sync_all_driver_statuses()
         data = Driver.objects.values(
             "status"
         ).annotate(
@@ -117,7 +114,7 @@ class DriverStatusChartAPIView(APIView):
 class TripStatusChartAPIView(APIView):
 
     def get(self, request):
-
+        sync_all_driver_statuses()
         data = Trip.objects.values(
             "status"
         ).annotate(
@@ -125,6 +122,7 @@ class TripStatusChartAPIView(APIView):
         )
 
         return Response(data)
+
 
 
 class MaintenanceStatusChartAPIView(APIView):
