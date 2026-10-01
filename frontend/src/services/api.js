@@ -1,7 +1,9 @@
 import axios from "axios";
 
+const BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api/";
+
 const api = axios.create({
-    baseURL: "http://127.0.0.1:8000/api/",
+    baseURL: BASE_URL,
 });
 
 // Request interceptor — attach access token
@@ -31,7 +33,7 @@ api.interceptors.response.use(
             if (refresh) {
                 try {
                     const res = await axios.post(
-                        "http://127.0.0.1:8000/api/accounts/login/refresh/",
+                        `${BASE_URL}accounts/login/refresh/`,
                         { refresh }
                     );
                     localStorage.setItem("access", res.data.access);
