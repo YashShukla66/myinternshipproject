@@ -18,6 +18,7 @@ import Maintenance from "./pages/Maintenance";
 import Notifications from "./pages/Notifications";
 import Reports from "./pages/Reports";
 import Prediction from "./pages/Prediction";
+import TawkMessengerReact from '@tawk.to/tawk-messenger-react';
 
 function ProtectedRoute({ children }) {
     const { isAuthenticated, loading } = useAuth();
@@ -69,6 +70,10 @@ export default function App() {
         <BrowserRouter>
             <AuthProvider>
                 <AppRoutes />
+                <TawkMessengerReact
+                    propertyId="YOUR_PROPERTY_ID"
+                    widgetId="YOUR_WIDGET_ID"
+                />
             </AuthProvider>
         </BrowserRouter>
     );

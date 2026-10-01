@@ -20,6 +20,7 @@ build/
 # Environment & Secrets
 .env
 backend/.env
+frontend/.env
 *.env
 
 # Media & Uploads
