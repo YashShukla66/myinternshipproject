@@ -411,7 +411,7 @@ export default function Login() {
                             Or Continue With
                         </p>
 
-                        <div id="googleBtnDiv" className="w-full"></div>
+                        <div id="googleBtnDiv" className="w-full flex justify-center"></div>
                     </div>
 
                     {/* Registration & Demo Options Footer */}
