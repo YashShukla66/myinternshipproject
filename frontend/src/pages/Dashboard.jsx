@@ -120,7 +120,7 @@ const Dashboard = () => {
             </span>
           </div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight">
-            Dashboard Analytics
+            Fleet Dashboard
           </h1>
           <p className="text-slate-400 text-xs mt-1">
             Real-time status tracking for vehicles, drivers, trips, and scheduled maintenance.
