@@ -33,7 +33,7 @@ api.interceptors.response.use(
             if (refresh) {
                 try {
                     const res = await axios.post(
-                        `${BASE_URL}accounts/login/refresh/`,
+                        `${BASE_URL}accounts/refresh/`,
                         { refresh }
                     );
                     localStorage.setItem("access", res.data.access);
