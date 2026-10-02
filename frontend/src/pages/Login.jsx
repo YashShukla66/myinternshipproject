@@ -333,9 +333,6 @@ export default function Login() {
                     <h1 className="text-3xl font-extrabold text-white tracking-tight">
                         Fleet <span className="gradient-text">Core</span>
                     </h1>
-                    <p className="text-slate-400 mt-2 text-sm font-medium">
-                        Real ID & Password Login • Google Authentication
-                    </p>
                 </div>
 
                 {/* Main Login Card */}
